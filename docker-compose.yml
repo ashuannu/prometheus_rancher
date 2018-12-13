@@ -1,0 +1,58 @@
+version: '2'
+volumes:
+  grafana-data-nfs:
+    driver: rancher-nfs
+    external: true
+  prometheus-data-nfs:
+    driver: rancher-nfs
+    external: true
+services:
+  grafana:
+    image: grafana/grafana:5.0.0
+    tty: true
+    links:
+    - prometheus:prometheus
+    volumes_from:
+    - graf-db
+    ports:
+    - 3000:3000
+    labels:
+      io.rancher.sidekicks: graf-db
+  prom-node-exporter-cadvisor:
+    image: ashutoshojha5/prom-node-exporter-cadvisor
+    stdin_open: true
+    network_mode: host
+    volumes:
+    - /sys:/sys:ro
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /var/lib/docker/:/var/lib/docker:ro
+    tty: true
+    labels:
+      io.rancher.container.pull_image: always
+      io.rancher.scheduler.global: 'true'
+  prometheus:
+    image: ashutoshojha5/prometheus:v2.1.0
+    volumes:
+    - prometheus-data-nfs:/prometheus
+    tty: true
+    user: root
+    links:
+    - prom-node-exporter-cadvisor:prom-node-exporter-cadvisor
+    ports:
+    - 9090:9090
+    command:
+    - --config.file=/etc/prom-conf/prometheus.yml
+    - --storage.tsdb.path=/prometheus
+    - --web.console.libraries=/etc/prometheus/console_libraries
+    - --web.console.templates=/etc/prometheus/consoles
+  graf-db:
+    image: infinityworks/graf-db:11
+    network_mode: none
+    volumes:
+    - grafana-data-nfs:/var/lib/grafana/
+    tty: true
+    links:
+    - prometheus:prometheus
+    command:
+    - cat
